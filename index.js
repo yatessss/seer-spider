@@ -1,9 +1,9 @@
 const puppeteer = require('puppeteer');
 const constants = require('./constant');
-
+const utils = require('./utils');
+const fs = require('fs');
 
 (async () => {
-
   const browser = await puppeteer.launch();
   const page = await browser.newPage();
   //访问网址 只有2个网络连接时触发（至少500毫秒后）
@@ -11,8 +11,11 @@ const constants = require('./constant');
 
   await page.waitForSelector('#tblUpcoming', {timeout: 10 * 1000})
 
+  let upcomingTableHeadInfo = {} //表头信息
+  let upcomingTableBodyInfo = [] // 最近新股列表
+
   // 获取表头信息
-  let tableHeadInfo = await page.$$eval('#tblUpcoming thead tr td', elements => {
+  upcomingTableHeadInfo = await page.$$eval('#tblUpcoming thead tr td', elements => {
     let result = [];
     for (let i = 0, len = elements.length; i < len; i++) {
       elements[i].innerText && result.push(elements[i].innerText)
@@ -21,43 +24,110 @@ const constants = require('./constant');
     return result;
   });
 
-
-  let tableBodyInfo = [];
-  let _con = await page.$$("#tblUpcoming tbody tr");
-  for (let i = 0, len = _con.length; i < len; i++) {
-    let titleArr = await _con[i].$$eval('td', els1 => {
+  // 最近新股列表
+  let tableContent = await page.$$("#tblUpcoming tbody tr");
+  for (let i = 0, len = tableContent.length; i < len; i++) {
+    let rowContent = await tableContent[i].$$eval('td', els1 => {
       let arr = [];
-      //开始解析每篇文章的标题
       for (let i = 0, len = els1.length; i < len; i++) {
-        els1[i].innerText && arr.push(els1[i].innerText); //获取文章的标题
+        els1[i].innerText && arr.push(els1[i].innerText);
       }
       return arr;
     });
-    tableBodyInfo.push(titleArr)
-    console.log(JSON.stringify(titleArr))
+    // 格式化
+
+    let result = {}
+    rowContent.forEach((item, index) => {
+      result[constants.HEAD_INFO_MAP[upcomingTableHeadInfo[index]]] = item
+    })
+    upcomingTableBodyInfo.push(result)
   }
-//  await console.log(_con)
-//  let titleArr = await page.$$eval('#tblUpcoming tr', els => {
-//    let arr = new Array();
-//    //开始解析每篇文章的标题
-//    for (let i = 0, len = els.length; i < len; i++) {
-//      arr.push(els[i].innerText); //获取文章的标题
-//    }
-//    return arr;
-//  });
-//  // 输出获取的标题
-//  await  console.log('输出方法获取的标题');
-//  for (let i = 0, len = titleArr.length; i < len; i++) {
-//    await console.log(titleArr[i]);
-//  }
+  console.log(JSON.stringify(upcomingTableBodyInfo))
 
+  // 循环拉取即将上市的公司的信息
+  for (let index = 0, len = upcomingTableBodyInfo.length; index < len; index++) {
+    let upcomingIpoInfo = {
+      name: '',
+      code: '',
+    }
+    let ipoTimeTable = {
+      title: '招股日程',
+      content: []
+    } //
+    let companyInfo = {
+      title: '公司资料',
+      content: []
+    }
+    let ipoInfo = {
+      title: '招股资料',
+      content: []
+    }
 
-  await page.screenshot({
-    path: 'capture.png',  //图片保存路径
-    type: 'png',
-    fullPage: true //边滚动边截图
-    // clip: {x: 0, y: 0, width: 1920, height: 800}
-  });
+    upcomingIpoInfo.code = upcomingTableBodyInfo[index].code
+    upcomingIpoInfo.name = upcomingTableBodyInfo[index].name
+
+    const code = upcomingTableBodyInfo[index].code.replace('.HK', '')
+    // 根据 返回的数据列表 抓取公司信息
+    await page.goto(`http://www.aastocks.com/sc/stocks/market/ipo/upcomingipo/company-summary?symbol=${code}&s=3&o=1#info`, {timeout: 10 * 1000, waitUntil: 'networkidle2'});
+
+    // 招股资料
+    let timeTable = await page.$$('#IPOInfo tr');
+    for (let i = 0, len = timeTable.length; i < len; i++) {
+      let rowContent = await timeTable[i].$$eval('td', els1 => {
+        let arr = [];
+        for (let i = 0, len = els1.length; i < len; i++) {
+          els1[i].innerText && arr.push(els1[i].innerText);
+        }
+        return arr;
+      });
+      ipoInfo.content.push(utils.arrayToObject(rowContent, constants.IPO_INFO_MAP))
+    }
+    console.log(JSON.stringify(ipoInfo))
+
+    // 招股日程、公司资料
+    let companyInfoList = await page.$$('#UCCompanySummary #tblCom .vat .ns2 tbody');
+    for (let i = 0, len = companyInfoList.length; i < len; i++) {
+      let rowContent = await companyInfoList[i].$$eval('tr', els1 => {
+        let arr = [];
+        for (let i = 0, len = els1.length; i < len; i++) {
+          els1[i].innerText && arr.push(els1[i].innerText);
+        }
+        return arr;
+      });
+      // 招股资料
+      if (i === 0) {
+        rowContent.forEach(item => {
+          let arr = item.split('\t')
+          ipoTimeTable.content.push(utils.arrayToObject(arr, constants.IPO_TIME_MAP))
+        })
+      } else if (i === 1) {
+        rowContent.forEach(item => {
+          let arr = item.split('\t')
+          companyInfo.content.push(utils.arrayToObject(arr, constants.COMPANY_MAP))
+        })
+      }
+    }
+
+    upcomingIpoInfo = {
+      ...upcomingIpoInfo,
+      ipoTimeTable,
+      companyInfo,
+      ipoInfo
+    }
+
+    console.log(JSON.stringify(upcomingIpoInfo))
+    fs.writeFileSync('./'+code+'.txt', JSON.stringify(upcomingIpoInfo))
+  }
 
   await browser.close();
 })();
+var a = {
+  "code": "06988.HK",
+  "name": "乐享互动",
+  "industry": "电子商贸及互联网服务",
+  "offerPrice": "2.14-3.21",
+  "lotSize": "1,000",
+  "entryFee": "3,242",
+  "offerPeriod": "2020/09/10-2020/09/15",
+  "listingDate": "2020/09/23"
+}
