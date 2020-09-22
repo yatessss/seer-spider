@@ -1,9 +1,12 @@
 const arrayToObject = function (arr = [], mappingTable = {}) {
   if (arr.length < 2) {
-    return {}
+    return null
+  }
+  if (!mappingTable[arr[0]]) {
+    return null
   }
   return {
-    [mappingTable[arr[0]] ? mappingTable[arr[0]] : arr[0]]: arr[1]
+    [mappingTable[arr[0]]]: arr[1]
   }
 }
 

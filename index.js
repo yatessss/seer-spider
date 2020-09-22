@@ -80,7 +80,7 @@ const fs = require('fs');
         }
         return arr;
       });
-      ipoInfo.content.push(utils.arrayToObject(rowContent, constants.IPO_INFO_MAP))
+      utils.arrayToObject(rowContent, constants.IPO_INFO_MAP) && ipoInfo.content.push(utils.arrayToObject(rowContent, constants.IPO_INFO_MAP))
     }
     console.log(JSON.stringify(ipoInfo))
 
@@ -98,12 +98,13 @@ const fs = require('fs');
       if (i === 0) {
         rowContent.forEach(item => {
           let arr = item.split('\t')
-          ipoTimeTable.content.push(utils.arrayToObject(arr, constants.IPO_TIME_MAP))
+
+          utils.arrayToObject(arr, constants.IPO_TIME_MAP) && ipoTimeTable.content.push(utils.arrayToObject(arr, constants.IPO_TIME_MAP))
         })
       } else if (i === 1) {
         rowContent.forEach(item => {
           let arr = item.split('\t')
-          companyInfo.content.push(utils.arrayToObject(arr, constants.COMPANY_MAP))
+          utils.arrayToObject(arr, constants.COMPANY_MAP) && companyInfo.content.push(utils.arrayToObject(arr, constants.COMPANY_MAP))
         })
       }
     }

@@ -16,7 +16,6 @@ const constants = {
     '香港配售股份数目3': 'offerShares',
     '保荐人': 'sponsor',
     '包销商': 'underwriter',
-    '收款银行': 'whiteForm',
     'eIPO': 'eIPO',
   },
   IPO_TIME_MAP: {
